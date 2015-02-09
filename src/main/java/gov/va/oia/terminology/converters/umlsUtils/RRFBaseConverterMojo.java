@@ -37,6 +37,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import org.apache.maven.plugin.logging.Log;
 import org.ihtsdo.otf.tcc.api.coordinate.Status;
 import org.ihtsdo.otf.tcc.api.metadata.binding.Taxonomies;
@@ -93,6 +94,8 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	private HashMap<String, HashMap<String, HashMap<String, AtomicInteger>>> mappingRelCounters_ = new HashMap<>();
 	private HashMap<String, AbbreviationExpansion> abbreviationExpansions;
 	
+	private HashSet<String> mapToIsa = new HashSet<>();
+	
 	//disabled debug code
 	//protected HashSet<UUID> conceptUUIDsUsedInRels_ = new HashSet<>();
 	//protected HashSet<UUID> conceptUUIDsCreated_ = new HashSet<>();
@@ -101,7 +104,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	 * If sabList is null or empty, no sab filtering is done. 
 	 */
 	protected void init(File outputDirectory, String pathPrefix, String tablePrefix, PropertyType ids, PropertyType attributes, 
-			Collection<String> sabList, List<String> additionalRootConcepts, long defaultTime) throws Exception
+			Collection<String> sabList, List<String> additionalRootConcepts, Collection<String> relsToMapToIsA, long defaultTime) throws Exception
 	{
 		clearTargetFiles(outputDirectory);
 		tablePrefix_ = tablePrefix;
@@ -113,6 +116,13 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 		
 		abbreviationExpansions = AbbreviationExpansion.load(
 				getClass().getResourceAsStream(isRxNorm ? "/RxNormAbbreviationsExpansions.txt" : "/UMLSAbbreviationExpansions.txt"));
+		
+		if (relsToMapToIsA != null)
+		{
+			mapToIsa.addAll(relsToMapToIsA);
+		}
+		mapToIsa.add("isa");
+		mapToIsa.add("CHD");
 		
 		if (sabList != null && sabList.size() > 0)
 		{
@@ -881,7 +891,14 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	 */
 	protected abstract void allDescriptionsCreated(String sab) throws Exception;
 	
-	protected abstract void processSAT(TtkComponentChronicle<?> itemToAnnotate, ResultSet rs, String itemCode, String itemSab, boolean skipAuiAnnotation) throws SQLException;
+	/**
+	 * @param customHandle - allow custom handling of particular items.  Pass null or an empty list if no custom handling is required.
+	 * Otherwise, pass a fuction that accepts two strings - it will be fed atn (attribute name) and atv (attribute value) - function should
+	 * return true, if the value is considered handled, and should not have 'normal' handling by the default code.  Else, return false,
+	 * and this code will behave as if no function was passed.
+	 */
+	protected abstract void processSAT(TtkComponentChronicle<?> itemToAnnotate, ResultSet rs, String itemCode, String itemSab, 
+			List<BiFunction<String, String, Boolean>> customHandle) throws SQLException;
 	
 	private void loadRelationshipMetadata(String terminologyName, String sab, UUID terminologyMetadataRoot) throws Exception
 	{
@@ -1016,7 +1033,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 			
 		}
 		
-		final PropertyType relationshipGeneric = new BPT_Relations("Relation Types Generic", terminologyName) {};  
+		final PropertyType relationshipGeneric = new BPT_Relations("Relation Types Generic", terminologyName + " Generic") {};  
 		relationshipGeneric.indexByAltNames();
 		final PropertyType relationshipSpecificType = new BPT_Relations(terminologyName) {}; //Relation Types - default metadata node
 		
@@ -1046,7 +1063,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 			Property p;
 			if (r.getIsRela())
 			{
-				if (r.getFSNName().equals("isa"))
+				if (mapToIsa.contains(r.getFSNName()))
 				{
 					p = new Property(r.getFSNName(), null, r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
 					relationshipSpecificType.addProperty(p);
@@ -1058,7 +1075,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 			}
 			else
 			{
-				if (r.getFSNName().equals("CHD"))
+				if (mapToIsa.contains(r.getFSNName()))
 				{
 					p = new Property((r.getAltName() == null ? r.getFSNName() : r.getAltName()), null, (r.getAltName() == null ? null : r.getFSNName()),
 							r.getDescription(), EConceptUtility.isARelUuid_);  //map to isA
@@ -1375,7 +1392,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 						satRelStatement_.clearParameters();
 						satRelStatement_.setString(1, dupeRel.getRui());
 						ResultSet nestedRels = satRelStatement_.executeQuery();
-						processSAT(r, nestedRels, null, dupeRel.getSab(), false);
+						processSAT(r, nestedRels, null, dupeRel.getSab(), null);
 					}
 					if (!isRxNorm && dupeRel.getSrui() != null)
 					{
