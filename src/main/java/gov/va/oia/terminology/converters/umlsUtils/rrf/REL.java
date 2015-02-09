@@ -5,7 +5,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class REL
 {
@@ -17,12 +19,18 @@ public class REL
 	
 	private boolean snomedSpecialHandling_ = false;
 	
-	public static List<REL> read(String sourceSab, ResultSet rs, boolean lookedUp2, RRFBaseConverterMojo bc) throws SQLException
+	public static List<REL> read(String sourceSab, ResultSet rs, boolean lookedUp2, Set<String> allowedCUIs, AtomicInteger cuiSkipCounter, RRFBaseConverterMojo bc) throws SQLException
 	{
 		ArrayList<REL> result = new ArrayList<>();
 		while (rs.next())
 		{
-			result.add(new REL(sourceSab, rs, lookedUp2, bc));
+			REL rel = new REL(sourceSab, rs, lookedUp2, bc);
+			if (allowedCUIs != null && (!allowedCUIs.contains(rel.cui1) || !allowedCUIs.contains(rel.cui2)))
+			{
+				cuiSkipCounter.getAndIncrement();
+				continue;
+			}
+			result.add(rel);
 		}
 		rs.close();
 		return result;
