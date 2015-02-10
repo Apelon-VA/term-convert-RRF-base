@@ -308,9 +308,9 @@ public class Relationship
 				{
 					swap = name1.startsWith("inverse_");
 				}
-				else if (name1.startsWith("has_") || name2.startsWith("has_"))  //has_ things as secondary
+				else if (name1.startsWith("has_") || name2.startsWith("has_"))  //has_ things as primary
 				{
-					swap = name1.startsWith("has_");
+					swap = name2.startsWith("has_");
 				}
 				else if (name1.startsWith("may_be") || name2.startsWith("may_be"))  //may_be X as primary
 				{

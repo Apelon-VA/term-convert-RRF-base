@@ -34,6 +34,11 @@ public class ValuePropertyPairWithAttributes extends ValuePropertyPair
 		values.add(value);
 	}
 	
+	public ArrayList<String> getStringAttribute(UUID type)
+	{
+		return stringAttributes.get(type);
+	}
+	
 	public void addUUIDAttribute(UUID type, UUID value)
 	{
 		ArrayList<UUID> values = uuidAttributes.get(type);
