@@ -4,7 +4,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>gov.va.oia.terminology.converters</groupId>
 	<artifactId>term-convert-rrf-base</artifactId>
-	<version>2.2-SNAPSHOT</version>
+	<version>2.1</version>
 	<packaging>jar</packaging>
 	
 	<name>RRF Loader Base Utilities</name>
