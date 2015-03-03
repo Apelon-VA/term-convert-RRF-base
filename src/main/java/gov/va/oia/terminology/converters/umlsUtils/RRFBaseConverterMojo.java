@@ -1364,6 +1364,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 				
 				//Now we have created a single relationship for this REL - iterate all of the duplicate definitions of this rel to pick up all of the unique annotations
 				//that we need.
+				HashSet<String> addedRUIs = new HashSet<>();
 				for (REL dupeRel : duplicateRels)
 				{
 					//on second thought, don't really need these on UMLS terms either.
@@ -1388,11 +1389,15 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 					}
 					if (dupeRel.getRui() != null)
 					{
-						eConcepts_.addAdditionalIds(r, dupeRel.getRui(), ptIds_.getProperty("RUI").getUUID());
-						satRelStatement_.clearParameters();
-						satRelStatement_.setString(1, dupeRel.getRui());
-						ResultSet nestedRels = satRelStatement_.executeQuery();
-						processSAT(r, nestedRels, null, dupeRel.getSab(), null);
+						if (!addedRUIs.contains(dupeRel.getRui()))
+						{
+							eConcepts_.addAdditionalIds(r, dupeRel.getRui(), ptIds_.getProperty("RUI").getUUID());
+							addedRUIs.add(dupeRel.getRui());
+							satRelStatement_.clearParameters();
+							satRelStatement_.setString(1, dupeRel.getRui());
+							ResultSet nestedRels = satRelStatement_.executeQuery();
+							processSAT(r, nestedRels, null, dupeRel.getSab(), null);
+						}
 					}
 					if (!isRxNorm && dupeRel.getSrui() != null)
 					{
