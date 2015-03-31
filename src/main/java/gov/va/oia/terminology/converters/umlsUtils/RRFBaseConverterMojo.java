@@ -6,18 +6,19 @@ import gov.va.oia.terminology.converters.sharedUtils.EConceptUtility;
 import gov.va.oia.terminology.converters.sharedUtils.EConceptUtility.DescriptionType;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Annotations;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_ContentVersion;
-import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Descriptions;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_MemberRefsets;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.BPT_Relations;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.ConceptCreationNotificationListener;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.Property;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.PropertyType;
 import gov.va.oia.terminology.converters.sharedUtils.stats.ConverterUUID;
+import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_Descriptions;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_Refsets;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_Relationship_Metadata;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_SAB_Metadata;
 import gov.va.oia.terminology.converters.umlsUtils.propertyTypes.PT_UMLS_Relationships;
 import gov.va.oia.terminology.converters.umlsUtils.rrf.REL;
+import java.beans.PropertyVetoException;
 import java.io.BufferedOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -41,11 +42,11 @@ import java.util.function.BiFunction;
 import org.apache.maven.plugin.logging.Log;
 import org.ihtsdo.otf.tcc.api.coordinate.Status;
 import org.ihtsdo.otf.tcc.api.metadata.binding.Taxonomies;
+import org.ihtsdo.otf.tcc.api.refexDynamic.data.RefexDynamicDataType;
 import org.ihtsdo.otf.tcc.api.uuid.UuidT3Generator;
 import org.ihtsdo.otf.tcc.dto.TtkConceptChronicle;
 import org.ihtsdo.otf.tcc.dto.component.TtkComponentChronicle;
-import org.ihtsdo.otf.tcc.dto.component.refex.type_string.TtkRefexStringMemberChronicle;
-import org.ihtsdo.otf.tcc.dto.component.refex.type_uuid.TtkRefexUuidMemberChronicle;
+import org.ihtsdo.otf.tcc.dto.component.refexDynamic.TtkRefexDynamicMemberChronicle;
 import org.ihtsdo.otf.tcc.dto.component.relationship.TtkRelationshipChronicle;
 
 public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
@@ -56,7 +57,6 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	protected HashMap<String, String> terminologyCodeRefsetPropertyName_ = new HashMap<>();
 	protected PropertyType ptUMLSAttributes_;
 	protected HashMap<String, PropertyType> ptTermAttributes_ = new HashMap<>();
-	protected PropertyType ptIds_;
 	protected PT_Refsets ptUMLSRefsets_;
 	protected HashMap<String, BPT_MemberRefsets> ptRefsets_ = new HashMap<>();
 	protected BPT_ContentVersion ptContentVersion_;
@@ -103,15 +103,14 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	/**
 	 * If sabList is null or empty, no sab filtering is done. 
 	 */
-	protected void init(File outputDirectory, String pathPrefix, String tablePrefix, PropertyType ids, PropertyType attributes, 
+	protected void init(File outputDirectory, String pathPrefix, String tablePrefix, PropertyType attributes, 
 			Collection<String> sabList, List<String> additionalRootConcepts, Collection<String> relsToMapToIsA, long defaultTime) throws Exception
 	{
 		clearTargetFiles(outputDirectory);
 		tablePrefix_ = tablePrefix;
 		isRxNorm = tablePrefix_.equals("RXN");
 		namespaceSeed_ = "gov.va.med.term.RRF." + tablePrefix + "." + pathPrefix;
-		
-		ptIds_ = ids;
+
 		ptUMLSAttributes_ = attributes;
 		
 		abbreviationExpansions = AbbreviationExpansion.load(
@@ -172,7 +171,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 
 		UUID archRoot = Taxonomies.WB_AUX.getUuids()[0];
 		metaDataRoot_ = ConverterUUID.createNamespaceUUIDFromString("metadata");
-		eConcepts_.createAndStoreMetaDataConcept(metaDataRoot_, (isRxNorm ? "RxNorm" : "UMLS") + " RRF Metadata", false, archRoot, dos_);
+		eConcepts_.createAndStoreMetaDataConcept(metaDataRoot_, (isRxNorm ? "RxNorm" : "UMLS") + " RRF Metadata", archRoot, null, dos_);
 
 		if (!isRxNorm)
 		{
@@ -274,13 +273,13 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 		ptUMLSRelationships_ = new PT_UMLS_Relationships();
 
 		//don't load ptContentVersion_ yet - custom code might add to it
-		eConcepts_.loadMetaDataItems(Arrays.asList(ptIds_, ptUMLSRefsets_, sourceMetadata, ptRelationshipMetadata_, ptUMLSAttributes_, ptUMLSRelationships_),
+		eConcepts_.loadMetaDataItems(Arrays.asList(ptUMLSRefsets_, sourceMetadata, ptRelationshipMetadata_, ptUMLSAttributes_, ptUMLSRelationships_),
 				metaDataRoot_, dos_);
 		
 		loadTerminologySpecificMetadata();
 		
 		//STYPE values
-		ptSTypes_= new PropertyType("STYPEs"){};
+		ptSTypes_= new PropertyType("STYPEs", true, RefexDynamicDataType.STRING){};
 		{
 			ConsoleUtil.println("Creating STYPE types");
 			ptSTypes_.indexByAltNames();
@@ -324,7 +323,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 		// Handle the languages
 		{
 			ConsoleUtil.println("Creating language types");
-			ptLanguages_ = new PropertyType("Languages"){};
+			ptLanguages_ = new PropertyType("Languages", true, RefexDynamicDataType.STRING){};
 			Statement s = db_.getConnection().createStatement();
 			ResultSet rs = s.executeQuery("SELECT * from " + tablePrefix_ + "DOC where DOCKEY = 'LAT' and VALUE in (select distinct LAT from " 
 					+ tablePrefix_ + "CONSO " + (sabQueryString_.length() > 0 ? " where " + sabQueryString_ : "") + ")");
@@ -366,7 +365,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 		// And Source Restriction Levels
 		{
 			ConsoleUtil.println("Creating Source Restriction Level types");
-			ptSourceRestrictionLevels_ = new PropertyType("Source Restriction Levels"){};
+			ptSourceRestrictionLevels_ = new PropertyType("Source Restriction Levels", true, RefexDynamicDataType.UUID){};
 			PreparedStatement ps = db_.getConnection().prepareStatement("SELECT VALUE, TYPE, EXPL from " + tablePrefix_ + "DOC where DOCKEY=? ORDER BY VALUE");
 			ps.setString(1, "SRL");
 			ResultSet rs = ps.executeQuery();
@@ -437,7 +436,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 		final PreparedStatement getSABMetadata = db_.getConnection().prepareStatement("Select * from " + tablePrefix_ + "SAB where (VSAB = ? or (RSAB = ? and CURVER='Y' ))");
 		{
 			ConsoleUtil.println("Creating Source Vocabulary types");
-			ptSABs_ = new PropertyType("Source Vocabularies"){};
+			ptSABs_ = new PropertyType("Source Vocabularies", true, RefexDynamicDataType.STRING){};
 			ptSABs_.indexByAltNames();
 			
 			HashSet<String> sabList = new HashSet<>();
@@ -534,7 +533,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 		// And semantic types
 		{
 			ConsoleUtil.println("Creating semantic types");
-			PropertyType ptSemanticTypes = new PropertyType("Semantic Types"){};
+			PropertyType ptSemanticTypes = new PropertyType("Semantic Types", true, RefexDynamicDataType.UUID){};
 			Statement s = db_.getConnection().createStatement();
 			ResultSet rs = s.executeQuery("SELECT distinct TUI, STN, STY from " + tablePrefix_+ "STY");
 			while (rs.next())
@@ -550,7 +549,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 					@Override
 					public void conceptCreated(Property property, TtkConceptChronicle concept)
 					{
-						eConcepts_.addAdditionalIds(concept, tui, ptIds_.getProperty("TUI").getUUID(), Status.ACTIVE);
+						eConcepts_.addStringAnnotation(concept, tui, ptUMLSAttributes_.getProperty("TUI").getUUID(), Status.ACTIVE);
 						eConcepts_.addStringAnnotation(concept, stn, ptUMLSAttributes_.getProperty("STN").getUUID(), Status.ACTIVE);
 					}
 				});
@@ -573,7 +572,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	protected PropertyType xDocLoaderHelper(String dockey, String niceName, boolean loadAsDefinition) throws Exception
 	{
 		ConsoleUtil.println("Creating '" + niceName + "' types");
-		PropertyType pt = new PropertyType(niceName) {};
+		PropertyType pt = new PropertyType(niceName, true, RefexDynamicDataType.UUID) {};
 		{
 			if (!loadAsDefinition)
 			{
@@ -650,8 +649,8 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 			termSpecificMetadataRoot = ConverterUUID.createNamespaceUUIDFromString("metadata");
 			//If we have an item with 'special' snomed handling, hide it down under the UMLS RRF metadata - as we don't load any concepts related 
 			//to this terminology - just pulling relationships.
-			eConcepts_.createAndStoreMetaDataConcept(termSpecificMetadataRoot, terminologyName + " Metadata", false, 
-					(specialHandling(sab) ? metaDataRoot_ : archRoot), dos_);
+			eConcepts_.createAndStoreMetaDataConcept(termSpecificMetadataRoot, terminologyName + " Metadata", 
+					(specialHandling(sab) ? metaDataRoot_ : archRoot), null, dos_);
 			
 			//dynamically add more attributes from *DOC
 			{
@@ -714,7 +713,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 			// And Descriptions
 			{
 				ConsoleUtil.println("Creating description types");
-				PropertyType descriptions = new BPT_Descriptions(terminologyName);
+				PropertyType descriptions = new PT_Descriptions(terminologyName);
 				descriptions.indexByAltNames();
 				Statement s = db_.getConnection().createStatement();
 				ResultSet usedDescTypes;
@@ -898,7 +897,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	 * and this code will behave as if no function was passed.
 	 */
 	protected abstract void processSAT(TtkComponentChronicle<?> itemToAnnotate, ResultSet rs, String itemCode, String itemSab, 
-			List<BiFunction<String, String, Boolean>> customHandle) throws SQLException;
+			List<BiFunction<String, String, Boolean>> customHandle) throws SQLException, PropertyVetoException;
 	
 	private void loadRelationshipMetadata(String terminologyName, String sab, UUID terminologyMetadataRoot) throws Exception
 	{
@@ -1096,7 +1095,8 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 					if (r.getInverseFSNName() != null)
 					{
 						eConcepts_.addDescription(concept, (r.getInverseAltName() == null ? r.getInverseFSNName() : r.getInverseAltName()), DescriptionType.FSN, 
-								false, null, ptRelationshipMetadata_.getProperty("Inverse FSN").getUUID(), Status.ACTIVE);
+								false, ptDescriptions_.get(sab).getProperty("Inverse FSN").getUUID(),
+								ptDescriptions_.get(sab).getProperty("Inverse FSN").getPropertyType().getPropertyTypeReferenceSetUUID(), Status.ACTIVE);
 					}
 					
 					if (r.getAltName() != null)
@@ -1105,14 +1105,16 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 						UUID descUUID = ConverterUUID.createNamespaceUUIDFromStrings(concept.getPrimordialUuid().toString(), r.getInverseFSNName(), 
 								DescriptionType.SYNONYM.name(), "false", "inverse");
 						//Yes, this looks funny, no its not a copy/paste error.  We swap the FSN and alt names for... it a long story.  42.
-						eConcepts_.addDescription(concept, descUUID, r.getInverseFSNName(), DescriptionType.SYNONYM, false, null, 
-								ptRelationshipMetadata_.getProperty("Inverse Synonym").getUUID(), Status.ACTIVE);
+						eConcepts_.addDescription(concept, descUUID, r.getInverseFSNName(), DescriptionType.SYNONYM, false, 
+								ptDescriptions_.get(sab).getProperty("Inverse Synonym").getUUID(),
+								ptDescriptions_.get(sab).getProperty("Inverse Synonym").getPropertyType().getPropertyTypeReferenceSetUUID(), Status.ACTIVE);
 					}
 					
 					if (r.getInverseDescription() != null)
 					{
-						eConcepts_.addDescription(concept, r.getInverseDescription(), DescriptionType.DEFINITION, true, null, 
-								ptRelationshipMetadata_.getProperty("Inverse Description").getUUID(), Status.ACTIVE);
+						eConcepts_.addDescription(concept, r.getInverseDescription(), DescriptionType.DEFINITION, true, 
+								ptDescriptions_.get(sab).getProperty("Inverse Description").getUUID(),
+								ptDescriptions_.get(sab).getProperty("Inverse Description").getPropertyType().getPropertyTypeReferenceSetUUID(), Status.ACTIVE);
 					}
 					
 					if (r.getRelType() != null)
@@ -1162,10 +1164,10 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	{
 		while (rs.next())
 		{
-			TtkRefexUuidMemberChronicle annotation = eConcepts_.addUuidAnnotation(concept, semanticTypes_.get(rs.getString("TUI")), ptUMLSAttributes_.getProperty("STY").getUUID());
+			TtkRefexDynamicMemberChronicle annotation = eConcepts_.addUuidAnnotation(concept, semanticTypes_.get(rs.getString("TUI")), ptUMLSAttributes_.getProperty("STY").getUUID());
 			if (rs.getString("ATUI") != null)
 			{
-				eConcepts_.addAdditionalIds(annotation, rs.getString("ATUI"), ptIds_.getProperty("ATUI").getUUID());
+				eConcepts_.addStringAnnotation(annotation, rs.getString("ATUI"), ptUMLSAttributes_.getProperty("ATUI").getUUID(), Status.ACTIVE);
 			}
 
 			if (rs.getObject("CVF") != null)  //might be an int or a string
@@ -1186,7 +1188,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 			for (Entry<String, HashSet<String>> valueAui : dataType.getValue().entrySet())
 			{
 				String value = valueAui.getKey();
-				TtkRefexStringMemberChronicle attribute = eConcepts_.addStringAnnotation(component, value, dataType.getKey(), Status.ACTIVE);
+				TtkRefexDynamicMemberChronicle attribute = eConcepts_.addStringAnnotation(component, value, dataType.getKey(), Status.ACTIVE);
 				if (!skipNestedAUIs)
 				{
 					for (String aui : valueAui.getValue())
@@ -1208,7 +1210,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 			for (Entry<UUID, HashSet<String>> valueAui : dataType.getValue().entrySet())
 			{
 				UUID value = valueAui.getKey();
-				TtkRefexUuidMemberChronicle attribute = eConcepts_.addUuidAnnotation(component, value, dataType.getKey());
+				TtkRefexDynamicMemberChronicle attribute = eConcepts_.addUuidAnnotation(component, value, dataType.getKey());
 				if (!skipNestedAUIs)
 				{
 					for (String aui : valueAui.getValue())
@@ -1280,8 +1282,9 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 	
 	/**
 	 * @throws SQLException
+	 * @throws PropertyVetoException 
 	 */
-	protected void addRelationships(TtkConceptChronicle concept, List<REL> relationships) throws SQLException
+	protected void addRelationships(TtkConceptChronicle concept, List<REL> relationships) throws SQLException, PropertyVetoException
 	{
 		HashMap<UUID, List<REL>> uniqueRels = new HashMap<>();
 		
@@ -1391,7 +1394,7 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 					{
 						if (!addedRUIs.contains(dupeRel.getRui()))
 						{
-							eConcepts_.addAdditionalIds(r, dupeRel.getRui(), ptIds_.getProperty("RUI").getUUID());
+							eConcepts_.addStringAnnotation(r, dupeRel.getRui(), ptUMLSAttributes_.getProperty("RUI").getUUID(), Status.ACTIVE);
 							addedRUIs.add(dupeRel.getRui());
 							satRelStatement_.clearParameters();
 							satRelStatement_.setString(1, dupeRel.getRui());
@@ -1430,7 +1433,10 @@ public abstract class RRFBaseConverterMojo extends ConverterBaseMojo
 					}
 					
 					//Add an attribute that says which relationship this attribute came from (can't use RUI, as it isn't provided consistently)
-					eConcepts_.addStringAnnotation(r, dupeRel.getSourceTargetAnnotationLabel(), ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), Status.ACTIVE);
+					if (dupeRel.getSourceTargetAnnotationLabel() != null)
+					{
+						eConcepts_.addStringAnnotation(r, dupeRel.getSourceTargetAnnotationLabel(), ptRelationshipMetadata_.getProperty("sAUI & tAUI").getUUID(), Status.ACTIVE);
+					}
 					
 				}
 

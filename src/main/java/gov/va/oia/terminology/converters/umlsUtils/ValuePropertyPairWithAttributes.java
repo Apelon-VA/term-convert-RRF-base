@@ -77,7 +77,7 @@ public class ValuePropertyPairWithAttributes extends ValuePropertyPair
 			
 			for (TtkConceptChronicle refsetConcept : descriptionSource.get(i).refsetMembership)
 			{
-				eConceptUtility.addRefsetMember(refsetConcept, descriptions.get(i).getPrimordialComponentUuid(), null, Status.ACTIVE, null);
+				eConceptUtility.addDynamicRefsetMember(refsetConcept, descriptions.get(i).getPrimordialComponentUuid(), null, Status.ACTIVE, null);
 			}
 		}
 	}

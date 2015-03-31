@@ -1,5 +1,8 @@
 package gov.va.oia.terminology.converters.umlsUtils.propertyTypes;
 
+import org.ihtsdo.otf.tcc.api.metadata.binding.RefexDynamic;
+import org.ihtsdo.otf.tcc.api.refexDynamic.data.RefexDynamicColumnInfo;
+import org.ihtsdo.otf.tcc.api.refexDynamic.data.RefexDynamicDataType;
 import gov.va.oia.terminology.converters.sharedUtils.propertyTypes.PropertyType;
 
 /**
@@ -10,7 +13,7 @@ public class PT_SAB_Metadata extends PropertyType
 	public PT_SAB_Metadata()
 	{
 		//from http://www.nlm.nih.gov/research/umls/rxnorm/docs/2013/rxnorm_doco_full_2013-2.html#s12_8
-		super("Source Vocabulary Metadata");
+		super("Source Vocabulary Metadata", true, RefexDynamicDataType.STRING);
 		indexByAltNames();
 		addProperty("Versioned CUI", null, "VCUI", "CUI of the versioned SRC concept for a source");
 		addProperty("Root CUI", null, "RCUI", "CUI of the root SRC concept for a source");
@@ -25,10 +28,14 @@ public class PT_SAB_Metadata extends PropertyType
 		addProperty("Meta Remove Version", null, "RMETA","The version of the Metathesaurus a source was removed, e.g., 2001AC");
 		addProperty("Source License Contact", null, "SLC","The source license contact information. A semi-colon separated list containing the following fields: Name; Title; Organization; Address 1; Address 2; City; State or Province; Country; Zip or Postal Code; Telephone; Contact Fax; Email; URL");
 		addProperty("Source Content Contact", null, "SCC","The source content contact information. A semi-colon separated list containing the following fields: Name; Title; Organization; Address 1; Address 2; City; State or Province; Country; Zip or Postal Code; Telephone; Contact Fax; Email; URL");
-		addProperty("Source Restriction Level", null, "SRL","0,1,2,3,4 - explained in the License Agreement.");
+		addProperty("Source Restriction Level", null, "SRL","0,1,2,3,4 - explained in the License Agreement.", false, -1, 
+				new RefexDynamicColumnInfo[] { new RefexDynamicColumnInfo(null, 0, RefexDynamic.REFEX_COLUMN_VALUE.getPrimodialUuid(),
+				RefexDynamicDataType.UUID, null, true, null, null)});
 		addProperty("Term Frequency", null, "TFR","The number of terms for this source in RXNCONSO.RRF, e.g., 12343 (not implemented yet)");
 		addProperty("CUI Frequency", null, "CFR","The number of CUIs associated with this source, e.g., 10234 (not implemented yet)");
-		addProperty("Context Type", null, "CXTY","The type of relationship label (Section 2.4.2 of UMLS Reference Manual)");
+		addProperty("Context Type", null, "CXTY","The type of relationship label (Section 2.4.2 of UMLS Reference Manual)", false, -1, 
+				new RefexDynamicColumnInfo[] { new RefexDynamicColumnInfo(null, 0, RefexDynamic.REFEX_COLUMN_VALUE.getPrimodialUuid(),
+				RefexDynamicDataType.UUID, null, true, null, null)});
 		addProperty("Term Type List", null, "TTYL","Term type list from source, e.g., MH,EN,PM,TQ");
 		addProperty("Attribute Name List", null, "ATNL","The attribute name list, e.g., MUI,RN,TH,...");
 		addProperty("Language", null, "LAT","The language of the terms in the source");
